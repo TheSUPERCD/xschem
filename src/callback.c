@@ -102,6 +102,7 @@ void redraw_w_a_l_r_p_z_rubbers(int force)
 {
   double mx = xctx->mousex_snap;
   double my = xctx->mousey_snap;
+  double origin_shifted_x2, origin_shifted_y2;
 
   if(!force && xctx->mousex_snap == xctx->prev_rubberx && xctx->mousey_snap == xctx->prev_rubbery) return;
 
@@ -110,17 +111,17 @@ void redraw_w_a_l_r_p_z_rubbers(int force)
     if(xctx->constr_mv == 1) my = xctx->my_double_save;
     if(xctx->constr_mv == 2) mx = xctx->mx_double_save;
     if(tclgetboolvar("orthogonal_wiring")) {
-      /* Origin shift the cartesian coordinate p2(x2,y2) w.r.t. p1(x1,y1) */
-      double origin_shifted_x2 = xctx->nl_x2 - xctx->nl_x1, origin_shifted_y2 = xctx->nl_y2 - xctx->nl_y1;
       new_wire(RUBBER|CLEAR, xctx->mousex_snap, xctx->mousey_snap);
-      /* Draw whichever component of the resulting orthogonal-wire is bigger
-       * (either horizontal or vertical), first */
+      /* Origin shift the cartesian coordinate p2(x2,y2) w.r.t. p1(x1,y1) */
+      origin_shifted_x2 = xctx->nl_x2 - xctx->nl_x1;
+      origin_shifted_y2 = xctx->nl_y2 - xctx->nl_y1;
+      /* Draw whichever component of the resulting orthogonal-wire is bigger (either horizontal or vertical), first */
       if(origin_shifted_x2*origin_shifted_x2 > origin_shifted_y2*origin_shifted_y2){
-          xctx->manhattan_lines = 1;
+        xctx->manhattan_lines = 1;
       } else {
-          xctx->manhattan_lines = 2;
+        xctx->manhattan_lines = 2;
       }
-    }   
+    }
     new_wire(RUBBER, mx, my);
   }
   if(xctx->ui_state & STARTARC) {
@@ -227,31 +228,30 @@ static void start_line(double mx, double my)
 
 static void start_wire(double mx, double my)
 {
-  dbg(1, "start_wire(): ui_state=%d, ui_state2=%d last_command=%d\n",
-      xctx->ui_state, xctx->ui_state2, xctx->last_command);
-  xctx->last_command = STARTWIRE;
-  if(xctx->ui_state & STARTWIRE) {
-    if(tclgetboolvar("orthogonal_wiring") && !tclgetboolvar("constr_mv")){
-      xctx->constr_mv = xctx->manhattan_lines;
-      new_wire(CLEAR, mx, my);
-      redraw_w_a_l_r_p_z_rubbers(1);
-    }  
-    if(xctx->constr_mv != 2) {
-      xctx->mx_double_save = mx;
-    }
-    if(xctx->constr_mv != 1) {
-      xctx->my_double_save = my;
-    }
-    if(xctx->constr_mv == 1) my = xctx->my_double_save;
-    if(xctx->constr_mv == 2) mx = xctx->mx_double_save;
-  } else {
-    xctx->mx_double_save=mx;
-    xctx->my_double_save=my;
-  }
-  new_wire(PLACE,mx, my);
-  if(tclgetboolvar("orthogonal_wiring") && !tclgetboolvar("constr_mv")) {
-    xctx->constr_mv = 0;
-  }
+     dbg(1, "start_wire(): ui_state=%d, ui_state2=%d last_command=%d\n", xctx->ui_state, xctx->ui_state2, xctx->last_command);
+     xctx->last_command = STARTWIRE;
+     if(xctx->ui_state & STARTWIRE) {
+       if(tclgetboolvar("orthogonal_wiring") && !tclgetboolvar("constr_mv")){
+         xctx->constr_mv = xctx->manhattan_lines;
+         new_wire(CLEAR, mx, my);
+         redraw_w_a_l_r_p_z_rubbers(1);
+       }
+       if(xctx->constr_mv != 2) {
+         xctx->mx_double_save = mx;
+       }
+       if(xctx->constr_mv != 1) {
+         xctx->my_double_save = my;
+       }
+       if(xctx->constr_mv == 1) my = xctx->my_double_save;
+       if(xctx->constr_mv == 2) mx = xctx->mx_double_save;
+     } else {
+       xctx->mx_double_save=mx;
+       xctx->my_double_save=my;
+     }
+     new_wire(PLACE,mx, my);
+     if(tclgetboolvar("orthogonal_wiring") && !tclgetboolvar("constr_mv")){
+         xctx->constr_mv = 0;
+     }
 }
 
 static double interpolate_yval(int idx, int p, double x, int sweep_idx, int point_not_last)
@@ -1519,82 +1519,99 @@ void draw_crosshair(int what, int state)
   xctx->draw_pixmap = sdp;
 }
 
-void find_snap_position(double *x, double *y, int pos_changed) {
-  if (!pos_changed) {
-    *x = xctx->prev_snapx;
-    *y = xctx->prev_snapy;
-  } else {
-    xctx->closest_pin_found = find_closest_net_or_symbol_pin(
-      xctx->mousex, xctx->mousey, x, y);
-  }
-}
+/* what == 3 : erase and draw a new cursor
+ * what == 1 : erase the cursor
+ * what == 2 : draw a diamond-shaped cursor that snaps to a component endpoint */
+void draw_snap_cursor(int what)
+{
+  int sdw, sdp;
+  int snapcursor_size = tclgetintvar("snap_cursor_size");
+  int pos_changed = (xctx->mousex_snap - xctx->prev_gridx) || (xctx->mousey_snap - xctx->prev_gridy);
+  double prev_x = xctx->prev_snapx;
+  double prev_y = xctx->prev_snapy;
+  dbg(1, "draw_snap_cursor(): what=%d\n", what);
+  sdw = xctx->draw_window;
+  sdp = xctx->draw_pixmap;
 
-void draw_snap_cursor_shape(GC gc, double x, double y, int snapcursor_size) {
-  /* Convert coordinates to screen space */
-  double screen_x = X_TO_SCREEN(x);
-  double screen_y = Y_TO_SCREEN(y);
-  double left = screen_x - snapcursor_size;
-  double right = screen_x + snapcursor_size;
-  double top = screen_y - snapcursor_size;
-  double bottom = screen_y + snapcursor_size;
-  int i;
-  /* Define crosshair lines */
-  double lines[4][4];
-  lines[0][0] = screen_x; lines[0][1] = top;      lines[0][2] = right;    lines[0][3] = screen_y;
-  lines[1][0] = right;    lines[1][1] = screen_y; lines[1][2] = screen_x; lines[1][3] = bottom;
-  lines[2][0] = screen_x; lines[2][1] = bottom;   lines[2][2] = left;     lines[2][3] = screen_y;
-  lines[3][0] = left;     lines[3][1] = screen_y; lines[3][2] = screen_x; lines[3][3] = top;
-  /* Draw crosshair lines */
-  for (i = 0; i < 4; i++) {
-      draw_xhair_line(gc, snapcursor_size, lines[i][0], lines[i][1], lines[i][2], lines[i][3]);
-  }
-}
-
-void erase_snap_cursor(double prev_x, double prev_y, int snapcursor_size) {
-  if (fix_broken_tiled_fill || !_unix) {
-      MyXCopyArea(display, xctx->save_pixmap, xctx->window, xctx->gc[0],
-          (int)X_TO_SCREEN(prev_x) - INT_WIDTH(xctx->lw) - snapcursor_size,
-          (int)Y_TO_SCREEN(prev_y) - INT_WIDTH(xctx->lw) - snapcursor_size,
-          2 * INT_WIDTH(xctx->lw) + 2 * snapcursor_size,
-          2 * INT_WIDTH(xctx->lw) + 2 * snapcursor_size,
-          (int)X_TO_SCREEN(prev_x) - INT_WIDTH(xctx->lw) - snapcursor_size,
-          (int)Y_TO_SCREEN(prev_y) - INT_WIDTH(xctx->lw) - snapcursor_size);
-  } else {
-      draw_snap_cursor_shape(xctx->gctiled, prev_x, prev_y, snapcursor_size);
-  }
-}
-
-/* action = 1 => erase */
-void draw_snap_cursor(int action) {
-  int snapcursor_size;
-  int pos_changed;
-  int prev_draw_window = xctx->draw_window;
-  int prev_draw_pixmap = xctx->draw_pixmap;
-  
-  if (!xctx->mouse_inside) return;  /* Early exit if mouse is outside */
-  snapcursor_size = tclgetintvar("snap_cursor_size");
-  pos_changed = (xctx->mousex_snap != xctx->prev_gridx) || (xctx->mousey_snap != xctx->prev_gridy);
-  /* Save current drawing context */
+  if(!xctx->mouse_inside) return;
   xctx->draw_pixmap = 0;
   xctx->draw_window = 1;
-  /* Erase and redraw the cursor if needed */
-  if (action & 1) {
-    double new_x, new_y;
-    erase_snap_cursor(xctx->prev_snapx, xctx->prev_snapy, snapcursor_size);
-
-    find_snap_position(&new_x, &new_y, pos_changed);
-    draw_snap_cursor_shape(xctx->gc[xctx->crosshair_layer],new_x, new_y, snapcursor_size);
-
-    /* Update previous position tracking */
+  if(what & 1) {
+    if(fix_broken_tiled_fill || !_unix) {
+      MyXCopyArea(display, xctx->save_pixmap, xctx->window, xctx->gc[0],
+           (int)X_TO_SCREEN(prev_x) - 1 * INT_WIDTH(xctx->lw) - snapcursor_size,
+           (int)Y_TO_SCREEN(prev_y) - 1 * INT_WIDTH(xctx->lw) - snapcursor_size,
+           2 * INT_WIDTH(xctx->lw) + 2 * snapcursor_size,
+           2 * INT_WIDTH(xctx->lw) + 2 * snapcursor_size,
+           (int)X_TO_SCREEN(prev_x) - 1 * INT_WIDTH(xctx->lw) - snapcursor_size,
+           (int)Y_TO_SCREEN(prev_y) - 1 * INT_WIDTH(xctx->lw) - snapcursor_size);
+      MyXCopyArea(display, xctx->save_pixmap, xctx->window, xctx->gc[0],
+           (int)X_TO_SCREEN(prev_x) - 1 * INT_WIDTH(xctx->lw) - snapcursor_size,
+           (int)Y_TO_SCREEN(prev_y) - 1 * INT_WIDTH(xctx->lw) - snapcursor_size,
+           2 * INT_WIDTH(xctx->lw) + 2 * snapcursor_size,
+           2 * INT_WIDTH(xctx->lw) + 2 * snapcursor_size,
+           (int)X_TO_SCREEN(prev_x) - 1 * INT_WIDTH(xctx->lw) - snapcursor_size,
+           (int)Y_TO_SCREEN(prev_y) - 1 * INT_WIDTH(xctx->lw) - snapcursor_size);
+    } else {
+      draw_xhair_line(xctx->gctiled, snapcursor_size,
+          X_TO_SCREEN(prev_x),
+          Y_TO_SCREEN(prev_y) - snapcursor_size,
+          X_TO_SCREEN(prev_x) + snapcursor_size,
+          Y_TO_SCREEN(prev_y));
+      draw_xhair_line(xctx->gctiled, snapcursor_size,
+          X_TO_SCREEN(prev_x) + snapcursor_size,
+          Y_TO_SCREEN(prev_y),
+          X_TO_SCREEN(prev_x),
+          Y_TO_SCREEN(prev_y) + snapcursor_size);
+      draw_xhair_line(xctx->gctiled, snapcursor_size,
+          X_TO_SCREEN(prev_x),
+          Y_TO_SCREEN(prev_y) + snapcursor_size,
+          X_TO_SCREEN(prev_x) - snapcursor_size,
+          Y_TO_SCREEN(prev_y));
+      draw_xhair_line(xctx->gctiled, snapcursor_size,
+          X_TO_SCREEN(prev_x) - snapcursor_size,
+          Y_TO_SCREEN(prev_y),
+          X_TO_SCREEN(prev_x),
+          Y_TO_SCREEN(prev_y) - snapcursor_size);
+    }
+  }
+  if(what & 1) {
+    double x, y;
+    if(!pos_changed) {
+      x = xctx->prev_snapx;
+      y = xctx->prev_snapy;
+    } else { /* Only search for nearest pin if the grid-snap-point has changed */
+      xctx->closest_pin_found = find_closest_net_or_symbol_pin(xctx->mousex, xctx->mousey, &x, &y);
+    }
+    draw_xhair_line(xctx->gc[xctx->crosshair_layer], snapcursor_size,
+        X_TO_SCREEN(x),
+        Y_TO_SCREEN(y) - snapcursor_size,
+        X_TO_SCREEN(x) + snapcursor_size,
+        Y_TO_SCREEN(y));
+    draw_xhair_line(xctx->gc[xctx->crosshair_layer], snapcursor_size,
+        X_TO_SCREEN(x) + snapcursor_size,
+        Y_TO_SCREEN(y),
+        X_TO_SCREEN(x),
+        Y_TO_SCREEN(y) + snapcursor_size);
+    draw_xhair_line(xctx->gc[xctx->crosshair_layer], snapcursor_size,
+        X_TO_SCREEN(x),
+        Y_TO_SCREEN(y) + snapcursor_size,
+        X_TO_SCREEN(x) - snapcursor_size,
+        Y_TO_SCREEN(y));
+    draw_xhair_line(xctx->gc[xctx->crosshair_layer], snapcursor_size,
+        X_TO_SCREEN(x) - snapcursor_size,
+        Y_TO_SCREEN(y),
+        X_TO_SCREEN(x),
+        Y_TO_SCREEN(y) - snapcursor_size);
     xctx->prev_gridx = xctx->mousex_snap;
     xctx->prev_gridy = xctx->mousey_snap;
-    xctx->prev_snapx = new_x;
-    xctx->prev_snapy = new_y;
+    xctx->prev_snapx = x;
+    xctx->prev_snapy = y;
   }
   draw_selection(xctx->gc[SELLAYER], 0);
-  /* Restore previous drawing context */
-  xctx->draw_window = prev_draw_window;
-  xctx->draw_pixmap = prev_draw_pixmap;
+  
+  xctx->draw_window = sdw;
+  xctx->draw_pixmap = sdp;
 }
 
 /* complete the STARTWIRE, STARTRECT, STARTZOOM, STARTCOPY ... operations */
@@ -2456,6 +2473,7 @@ static void handle_motion_notify(int event, KeySym key, int state, int rstate, i
       draw_crosshair(1, state); /* when moving mouse: first action is delete crosshair, will be drawn later */
       if(snap_cursor && wire_draw_active) draw_snap_cursor(1);
     }
+    if(snap_cursor && wire_draw_active) draw_snap_cursor(1);
     /* pan schematic */
     if(xctx->ui_state & STARTPAN) pan(RUBBER, mx, my);
 
@@ -2837,6 +2855,7 @@ static void handle_key_press(int event, KeySym key, int state, int rstate, int m
        xctx->last_command = 0;
        xctx->ui_state |= MENUSTART;
        xctx->ui_state2 = MENUSTARTWIRE;
+       if(prev_state & STARTWIRE) start_wire(xctx->mousex_snap, xctx->mousey_snap);
      }
      return;
    }
@@ -2869,6 +2888,19 @@ static void handle_key_press(int event, KeySym key, int state, int rstate, int m
    if(key=='Z' && rstate == 0)                   /* zoom in */
    {
     view_zoom(0.0); return;
+   }
+   if(key=='z' && EQUAL_MODMASK) /* toggle snap-cursor option */
+   {
+     if(tclgetboolvar("snap_cursor")) {
+       tclsetvar("snap_cursor", "0");
+       draw_snap_cursor(1);
+       xctx->closest_pin_found = 0;
+       xctx->prev_snapx = 0.0;
+       xctx->prev_snapy = 0.0;
+     } else {
+       tclsetvar("snap_cursor", "1");
+       if(wire_draw_active) draw_snap_cursor(3);
+     }
    }
    if(key=='p' && EQUAL_MODMASK)                           /* add symbol pin */
    {
@@ -3591,6 +3623,16 @@ static void handle_key_press(int event, KeySym key, int state, int rstate, int m
    if(key=='L' && EQUAL_MODMASK ) {                         /* add pin label*/
     place_net_label(0);
     return;
+   }
+   if(key=='L' && rstate == 0) {                         /* toggle orthogonal routing */
+    if(tclgetboolvar("orthogonal_wiring")){
+      tclsetboolvar("orthogonal_wiring", 0);
+      xctx->manhattan_lines = 0;
+    } else {
+      tclsetboolvar("orthogonal_wiring", 1);
+    }
+    redraw_w_a_l_r_p_z_rubbers(1);
+    break;
    }
    if(key=='F' && rstate == 0)                     /* flip */
    {
@@ -4348,7 +4390,7 @@ static void handle_button_release(int event, KeySym key, int state, int button, 
         && (xctx->ui_state & STARTWIRE) && !(xctx->ui_state & MENUSTART)) {
      if(end_place_move_copy_zoom()) return;
    }
- 
+
    /* end intuitive_interface copy or move */
    if(xctx->ui_state & STARTCOPY && xctx->drag_elements) {
       copy_objects(END);
@@ -4394,7 +4436,7 @@ static void handle_button_release(int event, KeySym key, int state, int button, 
        xctx->mousex_snap, xctx->mousey_snap, xctx->lastsel, xctx->sch_path[xctx->currsch] );
      statusmsg(str,1);
    }
-
+   
    /* clear start from menu flag or infix_interface=0 start commands */
    if(xctx->ui_state & MENUSTART) {
      xctx->ui_state &= ~MENUSTART;
@@ -4427,10 +4469,8 @@ static void handle_double_click(int event, int state, KeySym key, int button, in
          edit_property(0);
        } else {
          if(xctx->ui_state & STARTWIRE) {
-           if( cadence_compat ) {
-            redraw_w_a_l_r_p_z_rubbers(1);
-            start_wire(mx, my);
-           }
+           redraw_w_a_l_r_p_z_rubbers(1);
+           start_wire(mx, my);
            xctx->ui_state &= ~STARTWIRE;
          }
          if(xctx->ui_state & STARTLINE) {
