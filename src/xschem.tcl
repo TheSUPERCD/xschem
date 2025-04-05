@@ -699,6 +699,19 @@ proc ev0 {args} {
   }
 } 
 
+# create the 'lassign' command if tcl does not have it (pre 8.5)
+if {[info commands lassign] eq {}} {
+  proc lassign { list args } {
+    set n 0
+    foreach i $args {
+      upvar $i v
+      set v [lindex $list $n]
+      incr n
+    }
+    return [lrange $list $n end]
+  }
+}
+
 # return "$n * $indent" spaces
 proc spaces {n {indent 4}} {
   set n [expr {$n * $indent}]
@@ -709,40 +722,32 @@ proc spaces {n {indent 4}} {
 # complex number operators
 # a + b
 proc cadd {a b} {
-  # lassign $a ra ia
-  # lassign $b rb ib
-  foreach {ra ia} $a break
-  foreach {rb ib} $b break
+  lassign $a ra ia
+  lassign $b rb ib
   set c [list [expr {$ra + $rb}] [expr {$ia + $ib}]]
   return $c
 }
 
 # a - b
 proc csub {a b} {
-  # lassign $a ra ia
-  # lassign $b rb ib
-  foreach {ra ia} $a break
-  foreach {rb ib} $b break
+  lassign $a ra ia
+  lassign $b rb ib
   set c [list [expr {$ra - $rb}] [expr {$ia - $ib}]]
   return $c
 }
 
 # a * b
 proc cmul {a b} {
-  # lassign $a ra ia
-  # lassign $b rb ib
-  foreach {ra ia} $a break
-  foreach {rb ib} $b break
+  lassign $a ra ia
+  lassign $b rb ib
   set c [list [expr {$ra * $rb - $ia * $ib}] [expr {$ra * $ib + $rb * $ia}]]
   return $c
 }
 
 # a / b
 proc cdiv {a b} {
-  # lassign $a ra ia
-  # lassign $b rb ib
-  foreach {ra ia} $a break
-  foreach {rb ib} $b break
+  lassign $a ra ia
+  lassign $b rb ib
   set ra [expr {double($ra)}]
   set ia [expr {double($ia)}]
   set rb [expr {double($rb)}]
@@ -755,8 +760,7 @@ proc cdiv {a b} {
 # 1/b
 proc cinv {b} {
 
-  # lassign $b rb ib
-  foreach {rb ib} $b break
+  lassign $b rb ib
   set rb [expr {double($rb)}]
   set ib [expr {double($ib)}]
   set m [expr {$rb * $rb + $ib * $ib}]
@@ -766,15 +770,13 @@ proc cinv {b} {
 
 # return real component
 proc creal {a} {
-  # lassign $a ra ia
-  foreach {ra ia} $a break
+  lassign $a ra ia
   return $ra
 }
 
 # return imaginary component
 proc cimag {a} {
-  # lassign $a ra ia
-  foreach {ra ia} $a break
+  lassign $a ra ia
   return $ia
 }
 
@@ -1908,7 +1910,8 @@ proc cellview_setlabels {w symbol derived_symbol} {
     xschem set schsymbolprop $newprop
     xschem set_modify 3 ;# set only modified flag to force a save, do not update window/tab titles
     xschem save fast
-    xschem remove_symbols ;# purge all symbols to force a reload from disk 
+    # no! cellview_setlabels called from cellview inside a "foreach {i symbol} $syms {...}"
+    # xschem remove_symbols ;# purge all symbols to force a reload from disk 
     xschem load -keep_symbols -nodraw -noundoreset $current
     set netlist_type $save_netlist_type 
     xschem set netlist_type $netlist_type
@@ -1965,7 +1968,7 @@ proc cellview_edit_sym {w} {
 # derived_symbols: empty or 'derived_symbols'
 # upd: never set by caller (used iinternally to update)
 proc cellview { {derived_symbols {}} {upd 0}} {
-  global keep_symbols nolist_libs dark_gui_colorscheme netlist_type
+  global nolist_libs dark_gui_colorscheme netlist_type
 
   set save_netlist_type [xschem get netlist_type]
 
@@ -1986,13 +1989,11 @@ proc cellview { {derived_symbols {}} {upd 0}} {
     set font fixed
   }
 
+  set netlist_type $save_netlist_type 
+  xschem set netlist_type $netlist_type
+  xschem reload_symbols ;# purge unused symbols
+  xschem netlist -keep_symbols -noalert;# traverse the hierarchy and retain all encountered symbols
   if {!$upd} {
-    set netlist_type $save_netlist_type 
-    xschem set netlist_type $netlist_type
-    xschem reload_symbols ;# purge unused symbols
-    xschem netlist -keep_symbols -noalert;# traverse the hierarchy and retain all encountered symbols
-    puts "get netlist"
-
     catch {destroy .cv}
     toplevel .cv
     wm geometry .cv 800x200
@@ -2096,7 +2097,7 @@ proc cellview { {derived_symbols {}} {upd 0}} {
   if {$upd} {return}
 
   frame .cv.bottom
-  button .cv.bottom.update -text Update -command "cellview [list $derived_symbols] 1"
+  button .cv.bottom.update -text Update -command "cellview [list $derived_symbols] 1; xschem reload_symbols"
   pack .cv.bottom.update -side left
   label .cv.bottom.status -text {STATUS LINE}
   pack .cv.bottom.status -fill x -expand yes
@@ -4825,8 +4826,8 @@ proc load_file_dialog {{msg {}} {ext {}} {global_initdir {INITIALINSTDIR}}
 # if paths empty use XSCHEM_LIBRARY_PATH list.
 # 'levels' is set to the number of levels to descend into.
 # 'level' is used internally by the function and should not be set.
-proc get_list_of_dirs_with_symbols {{paths {}} {levels -1} {ext {\.(sch|sym)$}}   {level -1}} {
-  # puts "get_list_of_dirs_with_symbols paths=$paths"
+proc get_list_of_dirs_with_files {{paths {}} {levels -1} {ext {\.(sch|sym)$}}   {level -1}} {
+  # puts "get_list_of_dirs_with_files paths=$paths"
   global pathlist
   set dir_with_symbols {}
   if {$level == -1} { set level 0}
@@ -4847,7 +4848,7 @@ proc get_list_of_dirs_with_symbols {{paths {}} {levels -1} {ext {\.(sch|sym)$}} 
     set dirlist [glob -nocomplain -directory $i -type d *]
     if {$levels >=0 && $level + 1 > $levels} {return}
     foreach d $dirlist {
-      set dirs [get_list_of_dirs_with_symbols $d $levels $ext [expr {$level + 1} ]]
+      set dirs [get_list_of_dirs_with_files $d $levels $ext [expr {$level + 1} ]]
       if { $dirs ne {}} {set dir_with_symbols [concat $dir_with_symbols $dirs]}
     }
   }
@@ -4923,7 +4924,7 @@ proc insert_symbol_update_dirs {} {
   global insert_symbol
   # regenerate list of dirs
   set insert_symbol(dirs) [
-    get_list_of_dirs_with_symbols $insert_symbol(paths) $insert_symbol(maxdepth) $insert_symbol(ext)
+    get_list_of_dirs_with_files $insert_symbol(paths) $insert_symbol(maxdepth) $insert_symbol(ext)
   ]
   set insert_symbol(dirtails) {}
   foreach i $insert_symbol(dirs) {
@@ -4939,8 +4940,7 @@ proc insert_symbol_update_dirs {} {
   set insert_symbol(dirs) {}
   
   foreach f $files {
-    # lassign $f ff fff
-    foreach {ff fff} $f break ;# pre-tcl8.5
+    lassign $f ff fff
     lappend insert_symbol(dirtails) $ff
     lappend insert_symbol(dirs) $fff
   } 
@@ -4957,17 +4957,17 @@ proc insert_symbol_filelist {} {
     .ins.center.leftdir.l selection set active
   }
   set insert_symbol(dirindex) $sel
-  set paths [lindex $insert_symbol(dirs) $sel]
+  set path [lindex $insert_symbol(dirs) $sel]
   .ins.top2.dir_e configure -state normal
   .ins.top2.dir_e delete 0 end
-  .ins.top2.dir_e insert 0 $paths
+  .ins.top2.dir_e insert 0 $path
   .ins.top2.dir_e configure -state readonly
   # check if regex is valid
   set err [catch {regexp $insert_symbol(regex) {12345}} res]
   if {$err} {return}
   set f {}
-  if {$paths ne {} } {
-    set f [match_file $insert_symbol(regex) $paths 0]
+  if {$path ne {} } {
+    set f [match_file $insert_symbol(regex) $path 0]
   }
   set filelist {}
   set insert_symbol(fullpathlist) {}
@@ -4995,8 +4995,7 @@ proc insert_symbol_filelist {} {
   set filelist {}
   set insert_symbol(fullpathlist) {}
   foreach f $files {
-    # lassign $f ff fff
-    foreach {ff fff} $f break ;# pre-tcl8.5
+    lassign $f ff fff
     lappend filelist $ff
     lappend insert_symbol(fullpathlist) $fff
   }
@@ -5327,13 +5326,10 @@ proc schpins_to_sympins {} {
         set textflip [expr {$flip}]
       }
       ## lassign not available pre-tck8.5
-      # lassign [rotation $x0 $y0 $linex1 $liney1 $rot $flip] linex1 liney1
-      foreach {linex1 liney1} [rotation $x0 $y0 $linex1 $liney1 $rot $flip] break
-      # lassign [rotation $x0 $y0 $linex2 $liney2 $rot $flip] linex2 liney2
-      foreach {linex2 liney2} [rotation $x0 $y0 $linex2 $liney2 $rot $flip] break
-      # lassign [order $linex1 $liney1 $linex2 $liney2] linex1 liney1 linex2 liney2
-      foreach {linex1 liney1 linex2 liney2} [order $linex1 $liney1 $linex2 $liney2] break
-      # lassign [rotation $x0 $y0 $textx0 $texty0 $rot $flip] textx0 texty0
+      lassign [rotation $x0 $y0 $linex1 $liney1 $rot $flip] linex1 liney1
+      lassign [rotation $x0 $y0 $linex2 $liney2 $rot $flip] linex2 liney2
+      lassign [order $linex1 $liney1 $linex2 $liney2] linex1 liney1 linex2 liney2
+      lassign [rotation $x0 $y0 $textx0 $texty0 $rot $flip] textx0 texty0
       foreach {textx0 texty0} [rotation $x0 $y0 $textx0 $texty0 $rot $flip] break
       puts $fd "B 5 $pinx1 $piny1 $pinx2 $piny2 \{name=$lab dir=$dir\}"
       puts $fd "L 4 $linex1 $liney1 $linex2 $liney2 \{\}"
@@ -5397,7 +5393,7 @@ proc create_symbol {name {in {}} {out {}} {inout {}}} {
   set symname [file rootname $name].sym
   set res [catch {open $symname {WRONLY CREAT EXCL}} fd]
   if {$res} {puts $fd; return 0} ;# Error. Print reason and exit.
-  puts $fd {v {xschem version=3.4.6 file_version=1.2}}
+  puts $fd {v {xschem version=3.4.7RC file_version=1.2}}
   puts $fd {K {type=subcircuit format="@name @pinlist @symname" template="name=X1"}}
   set x -150
   set y 0
@@ -8236,7 +8232,8 @@ proc quit_xschem { {force {}}} {
 proc raise_dialog {parent window_path } {
   global file_dialog_loadfile component_browser_on_top
   foreach i ".dialog .graphdialog .load" {
-    if {!$component_browser_on_top && [info exists file_dialog_loadfile ] && $file_dialog_loadfile == 2 && $i eq {.load} } {
+    if {!$component_browser_on_top && [info exists file_dialog_loadfile ] &&
+        $file_dialog_loadfile == 2 && $i eq {.load} } {
       continue
     }
     if {[winfo exists $i] && [winfo ismapped $i] && [winfo ismapped $parent] &&
@@ -8518,39 +8515,51 @@ proc getmousey {win} {
   return $rely
 }
 
+proc switch_window {parent topwin event window} {
+  # puts "$parent $topwin $event $window"
+  raise_dialog $parent $topwin
+  
+  if { $parent eq {.}} {
+    if { $window eq $parent} {
+      xschem callback .drw $event 0 0 0 0 0 0
+    }
+  } else {
+    if {$window eq $parent} {
+      # send a fake event just to force context switching in callback()
+      xschem callback $parent.drw $event 0 0 0 0 0 0
+    }
+  }
+}
+
 proc set_bindings {topwin} {
 global env has_x OS autofocus_mainwindow
   ###
   ### Tk event handling
   ###
 
-  # puts "set_binding: topwin=$topwin"
   if {($OS== "Windows" || [string length [lindex [array get env DISPLAY] 1] ] > 0 ) && [info exists has_x]} {
     set parent [winfo toplevel $topwin]
+    # puts "set_binding: topwin=$topwin, parent=$parent"
   
-    bind $parent <Expose> [list raise_dialog $parent $topwin]
+    bind $parent <Expose> "if {{%W} eq {$parent}} {raise_dialog $parent $topwin}"
     bind $parent <Visibility> [list raise_dialog $parent $topwin]
-    bind $parent <FocusIn> [list raise_dialog $parent $topwin]
-    # send non-existent event just to force change schematic window context.
-    bind $parent <Enter> "
-       if { {$parent} eq {.}} {
-         if { {%W} eq {$parent}} {
-           # send a fake event just to force context switching in callback()
-           xschem callback .drw -55 0 0 0 0 0 0
-         }
-       } else {
-         if { {%W} eq {$parent}} {
-           # send a fake event just to force context switching in callback()
-           xschem callback $parent.drw -55 0 0 0 0 0 0
-         }
-       }
+
+    # Context switch.
+    bind $parent <FocusIn> "
+      # if {{%W} eq {$parent}} {
+      #   xschem switch $topwin
+      # }
+      switch_window $parent $topwin %T %W
     "
+
     bind $topwin <Leave> "
-      xschem callback %W %T %x %y 0 0 0 %s
-      graph_show_measure stop
-      # $topwin configure -cursor {}
+      if {{%W} eq {$topwin}} {
+        xschem callback %W %T %x %y 0 0 0 %s
+        graph_show_measure stop
+      }
     "
-    bind $topwin <Expose> "xschem callback %W %T %x %y 0 %w %h %s"
+
+    bind $topwin <Expose> "if {{%W} eq {$topwin}} {xschem callback %W %T %x %y 0 %w %h %s}"
 
     # transform mousewheel events into button4/5 events
     if {[info tclversion] > 8.7} {
@@ -8567,21 +8576,33 @@ global env has_x OS autofocus_mainwindow
     bind $topwin <Double-Button-2> "xschem callback %W -3 %x %y 0 %b 0 %s"
     bind $topwin <Double-Button-3> "xschem callback %W -3 %x %y 0 %b 0 %s"
     bind $topwin <Configure> "xschem callback %W %T %x %y 0 %w %h 0"
-    bind $topwin <ButtonPress> "focus $topwin; xschem callback %W %T %x %y 0 %b 0 %s"
+    if {$autofocus_mainwindow} {
+      bind $topwin <ButtonPress> "focus $topwin; xschem callback %W %T %x %y 0 %b 0 %s"
+    } else {
+      bind $topwin <ButtonPress> "xschem callback %W %T %x %y 0 %b 0 %s"
+    }
     bind $topwin <ButtonRelease> "xschem callback %W %T %x %y 0 %b 0 %s"
-    bind $topwin <KeyPress> "xschem callback %W %T %x %y %N 0 0 %s"
+    bind $topwin <KeyPress> "
+      if {{%K} eq {Escape}} { destroy .ctxmenu }
+      xschem callback %W %T %x %y %N 0 0 %s"
     bind $topwin <KeyRelease> "xschem callback %W %T %x %y %N 0 0 %s"
     if {$autofocus_mainwindow} {
       bind $topwin <Motion> "focus $topwin; xschem callback %W %T %x %y 0 0 0 %s"
       bind $topwin <Enter> "
-         # if {\$draw_crosshair} {$topwin configure -cursor none}
-         destroy .ctxmenu
-         focus $topwin
-         xschem callback %W %T %x %y 0 0 0 0
+        if {{%W} eq {$topwin}} {
+          destroy .ctxmenu
+          focus $topwin
+          xschem callback %W %T %x %y 0 0 0 0
+        }
       "
     } else {
       bind $topwin <Motion> "xschem callback %W %T %x %y 0 0 0 %s"
-      bind $topwin <Enter> "destroy .ctxmenu; xschem callback %W %T %x %y 0 0 0 0"
+      bind $topwin <Enter> "
+        if {{%W} eq {$topwin}} {
+          destroy .ctxmenu
+          xschem callback %W %T %x %y 0 0 0 0
+        }
+      "
     }
     bind $topwin <Unmap> " wm withdraw .infotext; set show_infowindow 0 "
     bind $topwin  "?" {textwindow "${XSCHEM_SHAREDIR}/xschem.help"}
@@ -8601,7 +8622,7 @@ global env has_x OS autofocus_mainwindow
       bind $topwin <Control-Alt-KeyPress> {xschem callback %W %T %x %y %N 0 0 [expr {$ControlMask + $Mod1Mask}]}
       bind $topwin <Shift-Alt-KeyPress> {xschem callback %W %T %x %y %N 0 0 [expr {$ShiftMask + $Mod1Mask}]}
       bind $topwin <Shift-Insert> {xschem callback %W %T %x %y %N 0 0 [expr {$ShiftMask}]}
-      bind $topwin <MouseWheel> {
+      bind $topwin <MouseWheel> { ;# transform MouseWheel into button 4/5 presses.
         if {%D<0} {
           xschem callback %W 4 %x %y 0 5 0 %s
         } else {
@@ -9332,13 +9353,7 @@ tclcommand=\"xschem raw_read \$netlist_dir/[file tail [file rootname [xschem get
   $topwin.menubar.simulation add cascade -label "LVS" -menu $topwin.menubar.simulation.lvs
   menu $topwin.menubar.simulation.lvs -tearoff 0
   $topwin.menubar.simulation.lvs add checkbutton -label "LVS netlist + Top level is a .subckt" \
-  -selectcolor $selectcolor -variable lvs_netlist -command {
-    if {$lvs_netlist == 1} {
-      xschem set format lvs_format 
-    } else {
-      xschem set format {}
-    }
-  }
+  -selectcolor $selectcolor -variable lvs_netlist 
   $topwin.menubar.simulation.lvs add checkbutton -label "Upper case .SUBCKT and .ENDS" \
   -selectcolor $selectcolor -variable uppercase_subckt
   $topwin.menubar.simulation.lvs add checkbutton -label "Top level is a .subckt" \
@@ -9738,7 +9753,7 @@ proc entry_replace_selection {w} {
 
 # focus the schematic window if mouse goes over it, even if a dialog box is displayed,
 # without needing to click. This allows to move/zoom/pan the schematic while editing attributes.
-set_ne autofocus_mainwindow 1
+set_ne autofocus_mainwindow 0
 if {$OS == "Windows"} {
   set_ne XSCHEM_TMP_DIR [xschem get temp_dir]
 } else {

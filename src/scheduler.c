@@ -1418,8 +1418,8 @@ int xschem(ClientData clientdata, Tcl_Interp *interp, int argc, const char * arg
           }
           else if(!strcmp(argv[2], "format")) { /* alternate format attribute to use in netlist (or NULL) */
             if(!xctx) {Tcl_SetResult(interp, not_avail, TCL_STATIC); return TCL_ERROR;}
-            if(!xctx->format ) Tcl_SetResult(interp, "<NULL>",TCL_STATIC);
-            else Tcl_SetResult(interp, xctx->format,TCL_VOLATILE);
+            if(!xctx->custom_format ) Tcl_SetResult(interp, "<NULL>",TCL_STATIC);
+            else Tcl_SetResult(interp, xctx->custom_format,TCL_VOLATILE);
           }
           break;
           case 'g':
@@ -2133,6 +2133,7 @@ int xschem(ClientData clientdata, Tcl_Interp *interp, int argc, const char * arg
       my_snprintf(res, S(res), "color_ps=%d\n", color_ps); Tcl_AppendResult(interp, res, NULL);
       my_snprintf(res, S(res), "hilight_nets=%d\n", xctx->hilight_nets); Tcl_AppendResult(interp, res, NULL);
       my_snprintf(res, S(res), "semaphore=%d\n", xctx->semaphore); Tcl_AppendResult(interp, res, NULL);
+      my_snprintf(res, S(res), "constr_mv=%d\n", xctx->constr_mv); Tcl_AppendResult(interp, res, NULL);
       my_snprintf(res, S(res), "ui_state=%d\n", xctx->ui_state); Tcl_AppendResult(interp, res, NULL);
       my_snprintf(res, S(res), "ui_state2=%d\n", xctx->ui_state2); Tcl_AppendResult(interp, res, NULL);
       my_snprintf(res, S(res), "drag_elements=%d\n", xctx->drag_elements); Tcl_AppendResult(interp, res, NULL);
@@ -2243,7 +2244,6 @@ int xschem(ClientData clientdata, Tcl_Interp *interp, int argc, const char * arg
         Tcl_SetResult(interp, s, TCL_VOLATILE);
       }
     }
-
 
     /* help
      *  Print command help */
@@ -3460,7 +3460,7 @@ int xschem(ClientData clientdata, Tcl_Interp *interp, int argc, const char * arg
         done_netlist = 1;
 
         save_keep = tclgetboolvar("keep_symbols");
-        tclsetboolvar("keep_symbols", keep_symbols);
+        if(keep_symbols) tclsetboolvar("keep_symbols", keep_symbols);
         if(xctx->netlist_type == CAD_SPICE_NETLIST)
           err = global_spice_netlist(hier_netlist, alert);
         else if(xctx->netlist_type == CAD_VHDL_NETLIST)
@@ -5345,7 +5345,7 @@ int xschem(ClientData clientdata, Tcl_Interp *interp, int argc, const char * arg
           }
           else if(!strcmp(argv[2], "format")) { /* set name of custom format attribute used for netlisting */
             if(!xctx) {Tcl_SetResult(interp, not_avail, TCL_STATIC); return TCL_ERROR;}
-            my_strdup(_ALLOC_ID_, &xctx->format, argv[3]);
+            my_strdup(_ALLOC_ID_, &xctx->custom_format, argv[3]);
           }
           else if(!strcmp(argv[2], "header_text")) { /* set header metadata (used for license info) */
             if(!xctx) {Tcl_SetResult(interp, not_avail, TCL_STATIC); return TCL_ERROR;}
@@ -5852,7 +5852,7 @@ int xschem(ClientData clientdata, Tcl_Interp *interp, int argc, const char * arg
      *   Return the base_name field of a symbol with name or number `n`
      *   Normally this is empty. It is set for overloaded symbols, that is symbols
      *   derived from the base symbol due to instance based implementation selection
-     *   (the instance "schematic" attribute) */
+     *   (the instance `schematic` attribute) */
     else if(!strcmp(argv[1], "symbol_base_name"))
     {
       int i = -1, found = 0;

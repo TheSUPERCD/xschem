@@ -1254,7 +1254,7 @@ void select_line(int c, int i, unsigned short select_mode, int fast, int overrid
 
 /* 20160503 return type field */
 Selected select_object(double mx,double my, unsigned short select_mode,
-                       int override_lock, Selected *selptr)
+                       int override_lock, const Selected *selptr)
 {
    Selected sel;
    xctx->already_selected = 0;
@@ -1587,10 +1587,12 @@ void select_inside(int stretch, double x1,double y1, double x2, double y2, int s
  drawtemprect(xctx->gc[SELLAYER], END, 0.0, 0.0, 0.0, 0.0);
  drawtempline(xctx->gc[SELLAYER], END, 0.0, 0.0, 0.0, 0.0);
 
+ #if 0
  if(!sel) {
    rebuild_selected_array();
    draw_selection(xctx->gc[SELLAYER], 0);
  }
+ #endif
 
 }
 
@@ -1722,10 +1724,12 @@ void select_touch(double x1,double y1, double x2, double y2, int sel) /*added un
  drawtemprect(xctx->gc[SELLAYER], END, 0.0, 0.0, 0.0, 0.0);
  drawtempline(xctx->gc[SELLAYER], END, 0.0, 0.0, 0.0, 0.0);
 
+ #if 0
  if(!sel) {
    rebuild_selected_array();
    draw_selection(xctx->gc[SELLAYER], 0);
  }
+ #endif
 
 }
 

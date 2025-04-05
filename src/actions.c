@@ -1832,7 +1832,7 @@ void launcher(void)
     } else { /* no action defined --> warning */
       const char *msg = "No action on launcher is defined (url or tclcommand)";
       dbg(0, "%s\n", msg);
-      if(has_x) tclvareval("alert_ {", msg, "} {}", NULL);
+      /* if(has_x) tclvareval("alert_ {", msg, "} {}", NULL); */ /* commented, annoying */
     }
     my_free(_ALLOC_ID_, &command);
     tcleval("after 300");
@@ -2045,9 +2045,9 @@ void get_additional_symbols(int what)
       my_strdup(_ALLOC_ID_, &verilog_sym_def, get_tok_value(xctx->inst[i].prop_ptr,"verilog_sym_def",4));
       my_strdup(_ALLOC_ID_, &vhdl_sym_def, get_tok_value(xctx->inst[i].prop_ptr,"vhdl_sym_def",4));
 
-      dbg(1, "get_additional_symbols(): schematic=%s\n", get_tok_value(xctx->inst[i].prop_ptr,"schematic",6));
       /* resolve schematic=generator.tcl( @n ) where n=11 is defined in instance attrs */
       my_strdup2(_ALLOC_ID_, &sch, get_tok_value(xctx->inst[i].prop_ptr,"schematic", 6));
+      dbg(1, "get_additional_symbols(): schematic=%s\n", sch);
       schematic_token_found = xctx->tok_size;
       my_strdup2(_ALLOC_ID_, &sch, translate3(sch, 1, xctx->inst[i].prop_ptr, NULL, NULL, NULL));
       dbg(1, "get_additional_symbols(): sch=%s tok_size= %ld\n", sch, xctx->tok_size);
@@ -2061,7 +2061,7 @@ void get_additional_symbols(int what)
         dbg(1, "get_additional_symbols(): schematic not existing\n");
         dbg(1, "using: %s\n", symbol_base_sch);
       }
-      if(schematic_token_found && sch[0]) { /* "schematic" token exists  and a schematic is specified */
+      if(schematic_token_found && sch[0]) { /* `schematic` token exists  and a schematic is specified */
         int j;
         char *sym = NULL;
         char *symname_attr = NULL;
@@ -3415,10 +3415,10 @@ void new_polygon(int what, double mousex_snap, double mousey_snap)
    }
    if( what & ADD)
    {
-     if(xctx->mousex_snap < xctx->nl_x1) xctx->nl_x1 = xctx->mousex_snap;
-     if(xctx->mousex_snap > xctx->nl_x2) xctx->nl_x2 = xctx->mousex_snap;
-     if(xctx->mousey_snap < xctx->nl_y1) xctx->nl_y1 = xctx->mousey_snap;
-     if(xctx->mousey_snap > xctx->nl_y2) xctx->nl_y2 = xctx->mousey_snap;
+     if(mousex_snap < xctx->nl_x1) xctx->nl_x1 = mousex_snap;
+     if(mousex_snap > xctx->nl_x2) xctx->nl_x2 = mousex_snap;
+     if(mousey_snap < xctx->nl_y1) xctx->nl_y1 = mousey_snap;
+     if(mousey_snap > xctx->nl_y2) xctx->nl_y2 = mousey_snap;
      /* closed poly */
      if(what & END) {
        /* delete last rubber */
@@ -3428,8 +3428,8 @@ void new_polygon(int what, double mousex_snap, double mousey_snap)
      /* add point */
      } else if(xctx->nl_polyx[xctx->nl_points] != xctx->nl_polyx[xctx->nl_points-1] ||
           xctx->nl_polyy[xctx->nl_points] != xctx->nl_polyy[xctx->nl_points-1]) {
-       xctx->nl_polyx[xctx->nl_points] = xctx->mousex_snap;
-       xctx->nl_polyy[xctx->nl_points] = xctx->mousey_snap;
+       xctx->nl_polyx[xctx->nl_points] = mousex_snap;
+       xctx->nl_polyy[xctx->nl_points] = mousey_snap;
      } else {
        return;
      }
@@ -3456,16 +3456,16 @@ void new_polygon(int what, double mousex_snap, double mousey_snap)
    }
    if(what & RUBBER)
    {
-     if(xctx->mousex_snap < xctx->nl_x1) xctx->nl_x1 = xctx->mousex_snap;
-     if(xctx->mousex_snap > xctx->nl_x2) xctx->nl_x2 = xctx->mousex_snap;
-     if(xctx->mousey_snap < xctx->nl_y1) xctx->nl_y1 = xctx->mousey_snap;
-     if(xctx->mousey_snap > xctx->nl_y2) xctx->nl_y2 = xctx->mousey_snap;
+     if(mousex_snap < xctx->nl_x1) xctx->nl_x1 = mousex_snap;
+     if(mousex_snap > xctx->nl_x2) xctx->nl_x2 = mousex_snap;
+     if(mousey_snap < xctx->nl_y1) xctx->nl_y1 = mousey_snap;
+     if(mousey_snap > xctx->nl_y2) xctx->nl_y2 = mousey_snap;
      /* fprintf(errfp, "new_poly: RUBBER\n"); */
      drawtemppolygon(xctx->gctiled, NOW, xctx->nl_polyx, xctx->nl_polyy, xctx->nl_points+1, 0);
-     xctx->nl_polyy[xctx->nl_points] = xctx->mousey_snap;
-     xctx->nl_polyx[xctx->nl_points] = xctx->mousex_snap;
+     xctx->nl_polyy[xctx->nl_points] = mousey_snap;
+     xctx->nl_polyx[xctx->nl_points] = mousex_snap;
      restore_selection(xctx->nl_x1, xctx->nl_y1, xctx->nl_x2, xctx->nl_y2);
-     /* xctx->nl_x2 = xctx->mousex_snap; xctx->nl_y2 = xctx->mousey_snap; */
+     /* xctx->nl_x2 = mousex_snap; xctx->nl_y2 = mousey_snap; */
      drawtemppolygon(xctx->gc[xctx->rectcolor], NOW, xctx->nl_polyx, xctx->nl_polyy, xctx->nl_points+1, 0);
    }
 }
@@ -3799,7 +3799,13 @@ void fix_restore_rect(double x1, double y1, double x2, double y2)
 }
 
 
-/*  20150927 select=1: select objects, select=0: unselect objects */
+/*  20150927 select=1: select objects, select=0: unselect objects
+ * uses static variables:
+ *   xctx->nl_xr, xctx->nl_yr, xctx->nl_xr2, xctx->nl_yr2: The selection box
+ *   xctx->nl_sel: selection mode (1=select, 0=unselect) as set in what == START
+ *   xctx->nl_dir: drag direction: 1=right, 1=left
+ *   xctx->nl_sem: semaphore used internally to detect misuse of the function.
+ */
 void select_rect(int stretch, int what, int select)
 {
  double nl_xx1, nl_yy1, nl_xx2, nl_yy2;
@@ -3818,10 +3824,6 @@ void select_rect(int stretch, int what, int select)
     drawtemprect(xctx->gctiled,NOW, nl_xx1,nl_yy1,nl_xx2,nl_yy2);
     xctx->nl_xr2=xctx->mousex;xctx->nl_yr2=xctx->mousey;
 
-    /*  20171026 update unselected objects while dragging */
-    rebuild_selected_array();
-    draw_selection(xctx->gc[SELLAYER], 0);
-    
     if(!xctx->nl_sel || (incremental_select && xctx->nl_dir == 0))
        select_inside(stretch, nl_xx1, nl_yy1, nl_xx2, nl_yy2, xctx->nl_sel);
     else if(incremental_select && xctx->nl_dir == 1 && sel_touch)
@@ -3829,6 +3831,9 @@ void select_rect(int stretch, int what, int select)
     nl_xx1=xctx->nl_xr;nl_xx2=xctx->nl_xr2;nl_yy1=xctx->nl_yr;nl_yy2=xctx->nl_yr2;
     RECTORDER(nl_xx1,nl_yy1,nl_xx2,nl_yy2);
     drawtemprect(xctx->gc[SELLAYER],NOW, nl_xx1,nl_yy1,nl_xx2,nl_yy2);
+
+    rebuild_selected_array();
+    draw_selection(xctx->gc[SELLAYER], 0);
  }
  else if(what & START)
  {

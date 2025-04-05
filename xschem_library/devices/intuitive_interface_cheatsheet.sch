@@ -1,4 +1,4 @@
-v {xschem version=3.4.6 file_version=1.2
+v {xschem version=3.4.7RC file_version=1.2
 *
 * This file is part of XSCHEM,
 * a schematic capture and Spice/Vhdl/Verilog netlisting tool for circuit
@@ -6371,3 +6371,4 @@ T {Add attribute:} 1048.75 -173.75 0 0 0.5 0.5 {}
 T {bezier=1} 1050 -131.25 0 0 0.7 0.7 {font=monospace layer=4}
 T {h} 1710 -6245 0 0 0.5 0.5 {hcenter=1}
 T {v} 2560 -6425 0 0 0.5 0.5 {hcenter=1}
+C {bindkeys_cheatsheet.sym} 190 700 0 0 {}

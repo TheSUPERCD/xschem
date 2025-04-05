@@ -23,7 +23,7 @@
 #ifndef CADGLOBALS
 #define CADGLOBALS
 
-#define XSCHEM_VERSION "3.4.6"
+#define XSCHEM_VERSION "3.4.7RC"
 #define XSCHEM_FILE_VERSION "1.2"
 
 #if HAS_PIPE == 1
@@ -1137,6 +1137,7 @@ typedef struct {
   int hide_symbols; /* MIRRORED IN TCL */
   int netlist_type;
   char *format; /* "format", "verilog_format", "vhdl_format" or "tedax_format" */
+  char *custom_format; /* user specified format string to use for spice netlist (xschem set format command) */
   char *top_path;
   /* top_path is the path prefix of drawing canvas (current_win_path):
    * top_path is always "" in tabbed interface 
@@ -1389,7 +1390,7 @@ extern int text_bbox_nocairo(const char * str,double xscale, double yscale,
 #endif
 
 extern Selected select_object(double mx,double my, unsigned short sel_mode,
-                                    int override_lock, Selected *selptr);
+                                    int override_lock, const Selected *selptr);
 extern int set_first_sel(unsigned short type, int n, unsigned int col);
 extern void unselect_all(int dr);
 extern void select_attached_nets(void);
